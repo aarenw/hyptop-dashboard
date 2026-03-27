@@ -1,0 +1,23 @@
+[Unit]
+Description=Hyptop LPAR metrics Prometheus exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User to a non-root account that can read /s390_hypfs (often root is required on LPAR).
+User=root
+# Use the venv interpreter and module path from your install:
+ExecStart=/opt/hyptop-dashboard/.venv/bin/python -m hyptop_dashboard \
+    --listen-host 0.0.0.0 \
+    --listen-port 9105 \
+    --interval-seconds 15 \
+    --hyptop-binary /usr/bin/hyptop \
+    --hyptop-delay 1 \
+    --hyptop-cpu-types ifl \
+    --smt-speedup 1.3
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

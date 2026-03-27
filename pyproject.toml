@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyptop-dashboard"
+version = "0.1.0"
+description = "Prometheus exporter for IBM Z/LinuxONE hyptop LPAR metrics and SMT-adjusted utilization"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "prometheus-client>=0.20.0",
+]
+
+[project.scripts]
+hyptop-exporter = "hyptop_dashboard.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
