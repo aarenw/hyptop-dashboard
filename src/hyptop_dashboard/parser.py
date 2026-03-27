@@ -104,11 +104,11 @@ def parse_hyptop_sys_list_text(text: str) -> list[LparRow]:
 def run_hyptop_once(
     hyptop_bin: str = "hyptop",
     delay_seconds: int = 1,
-    cpu_types: str = "ifl",
     timeout_seconds: float = 30.0,
 ) -> str:
     """
     Run hyptop in batch mode for a single screen update and return stdout (decoded).
+    Does not pass -t; hyptop uses its default CPU-type mix.
     """
     args = [
         hyptop_bin,
@@ -120,8 +120,6 @@ def run_hyptop_once(
         "-f",
         HYPTOP_FIELD_SPEC,
     ]
-    if cpu_types:
-        args.extend(["-t", cpu_types])
     proc = subprocess.run(
         args,
         capture_output=True,

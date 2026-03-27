@@ -107,7 +107,6 @@ def _collection_loop(
     interval: float,
     hyptop_bin: str,
     hyptop_delay: int,
-    cpu_types: str,
     hyptop_timeout: float,
     s: float,
     gauges: list[Gauge],
@@ -118,7 +117,6 @@ def _collection_loop(
             out = run_hyptop_once(
                 hyptop_bin=hyptop_bin,
                 delay_seconds=hyptop_delay,
-                cpu_types=cpu_types,
                 timeout_seconds=hyptop_timeout,
             )
             rows = parse_hyptop_sys_list_text(out)
@@ -166,16 +164,6 @@ def main(argv: list[str] | None = None) -> int:
         help="hyptop -d delay between screen updates in batch (default 1).",
     )
     p.add_argument(
-        "--hyptop-cpu-types",
-        default="ifl",
-        help="hyptop -t argument, e.g. ifl or ifl,cp (default ifl).",
-    )
-    p.add_argument(
-        "--omit-hyptop-cpu-types",
-        action="store_true",
-        help="Do not pass hyptop -t (use hypervisor default CPU-type mix).",
-    )
-    p.add_argument(
         "--hyptop-timeout",
         type=float,
         default=30.0,
@@ -206,14 +194,12 @@ def main(argv: list[str] | None = None) -> int:
         args.interval_seconds,
     )
 
-    cpu_types = "" if args.omit_hyptop_cpu_types else args.hyptop_cpu_types.strip()
     thread = threading.Thread(
         target=_collection_loop,
         kwargs={
             "interval": args.interval_seconds,
             "hyptop_bin": args.hyptop_binary,
             "hyptop_delay": args.hyptop_delay,
-            "cpu_types": cpu_types,
             "hyptop_timeout": args.hyptop_timeout,
             "s": args.smt_speedup,
             "gauges": gauges,
