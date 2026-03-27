@@ -23,7 +23,7 @@ def test_parse_sample_fixture():
     from pathlib import Path
 
     text = (Path(__file__).parent / "fixtures" / "hyptop_sys_list_sample.txt").read_text()
-    rows = parse_hyptop_sys_list_text(text)
+    rows = parse_hyptop_sys_list_text(text, hypervisor="lpar")
     assert rows == [
         LparRow("S35LP41", 12, 24, 101.28, 170.28, 0.28),
         LparRow("S35LP42", 16, 32, 35.07, 40.07, 0.44),
@@ -39,9 +39,30 @@ system   #core    core    mgm    Core+  Mgm+   online
 S05LP30     10  461.14  10.18  1547:41  8:15 11:05:59
           413  823.39  23.86  3159:57 38:08 11:06:01
 """
-    rows = parse_hyptop_sys_list_text(text)
+    rows = parse_hyptop_sys_list_text(text, hypervisor="lpar")
     assert len(rows) == 0  # sample uses fewer columns; not valid for our MIN_COLUMNS path
 
 
 def test_parse_short_row_ignored():
-    assert parse_hyptop_sys_list_text("foo 1\n") == []
+    assert parse_hyptop_sys_list_text("foo 1\n", hypervisor="lpar") == []
+
+
+def test_parse_zvm_sample():
+    from pathlib import Path
+
+    text = (Path(__file__).parent / "fixtures" / "hyptop_zvm_sys_list_sample.txt").read_text()
+    rows = parse_hyptop_sys_list_text(text, hypervisor="zvm")
+    assert rows == [
+        LparRow("G3545010", 3, 3, 0.55, 0.55, 0.05),
+        LparRow("G3545021", 3, 3, 0.04, 0.04, 0.0),
+        LparRow("G3545025", 2, 2, 0.01, 0.01, 0.0),
+    ]
+    for r in rows:
+        assert r.thread_percent == r.core_percent
+
+
+def test_parse_zvm_requires_hypervisor():
+    from pathlib import Path
+
+    text = (Path(__file__).parent / "fixtures" / "hyptop_zvm_sys_list_sample.txt").read_text()
+    assert parse_hyptop_sys_list_text(text, hypervisor="lpar") == []

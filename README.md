@@ -1,12 +1,12 @@
 # hyptop-dashboard
 
-在 IBM Z 和 LinuxONE 上，计算资源常被过度超配。本仓库提供一个在 **LPAR 的 Linux** 上运行的小型 **Prometheus exporter**：周期性调用 [hyptop](https://www.ibm.com/docs/en/linux-on-systems?topic=c-hyptop) 采集 IFL 相关指标，按 [SMT 真实利用率](https://linux.mainframe.blog/smt_utilization/) 公式计算 **SMT 调整后的利用率**，并通过 HTTP `/metrics` 供 Prometheus 抓取；可用 Grafana 展示 LPAR 利用率与其它导出的指标。
+在 IBM Z 和 LinuxONE 上，计算资源常被过度超配。本仓库提供一个在 **LPAR 或 z/VM 客户机 Linux** 上运行的小型 **Prometheus exporter**：周期性调用 [hyptop](https://www.ibm.com/docs/en/linux-on-systems?topic=c-hyptop) 采集指标，按 [SMT 真实利用率](https://linux.mainframe.blog/smt_utilization/) 公式计算 **SMT 调整后的利用率**（LPAR 上；z/VM 上见下文说明），并通过 HTTP `/metrics` 供 Prometheus 抓取。
 
-On IBM Z and LinuxONE, compute capacity is often oversubscribed. This repo ships a **Prometheus exporter** that runs on **Linux in the LPAR**, periodically runs **hyptop**, computes **SMT-adjusted “real” utilization** (see formula below), and exposes **Prometheus** metrics over HTTP for **Grafana** dashboards.
+On IBM Z and LinuxONE, compute capacity is often oversubscribed. This repo ships a **Prometheus exporter** that runs on **Linux in an LPAR or a z/VM guest**, periodically runs **hyptop**, computes **SMT-adjusted “real” utilization** where separate thread/core figures exist (LPAR), and exposes **Prometheus** metrics over HTTP for **Grafana** dashboards.
 
 ## Requirements
 
-- Linux on LPAR with `hyptop` installed and permission to read the relevant **debugfs** hyptop data (see IBM hyptop documentation).
+- Linux with `hyptop` installed (LPAR or z/VM guest) and permission to read the relevant **debugfs** hyptop data (see IBM hyptop documentation).
 - Python **3.9+** and `prometheus-client`.
 - Network path from **Prometheus** to the LPAR (or collector host) on the exporter listen port.
 
@@ -17,6 +17,8 @@ Using hyptop’s **core** (`u_c`), **thread** (`u_t`), and **management** (`u_m`
 u_r = \frac{2u_c - u_t}{s} + (u_t - u_c) + u_m
 
 Reference: [SMT: What utilization in real?](https://linux.mainframe.blog/smt_utilization/)
+
+On **z/VM**, hyptop `sys_list` has only aggregate **cpu** and **mgm** for guests (no separate **thread** column in the default field set). The exporter duplicates **cpu%** for the thread gauge and sets **#threads = #cpu**; the “real SMT” series then reduces to the **single-thread case** \(u_r = u_c/s + u_m\) because \(u_t = u_c\).
 
 ## Install
 
@@ -46,10 +48,33 @@ python3 -m hyptop_dashboard --help
 
 ## Run the exporter
 
-The exporter runs `hyptop` in batch mode with LPAR fields `#,T,c,e,m,C,E,M,o` (IBM example: `hyptop -f "#,T,c,e,m,C,E,M,o"`), then parses **sys_list** rows. It does **not** pass `hyptop -t`; CPU dispatch types use hyptop’s default (see IBM [CPU types](https://www.ibm.com/docs/en/linux-on-systems?topic=h-cpu-types) if you need to change behavior interactively).
+Use **`--hypervisor lpar`** (default) or **`--hypervisor zvm`**. The exporter runs `hyptop -b` with the IBM **sys_list** field set for that environment:
+
+| `--hypervisor` | hyptop `-f` value        | IBM fields |
+|----------------|--------------------------|------------|
+| `lpar`         | `#,T,c,e,m,C,E,M,o`      | [LPAR fields](https://www.ibm.com/docs/en/linux-on-systems?topic=fu-lpar-fields) |
+| `zvm`          | `#,c,m,C,M,o`            | [z/VM fields](https://www.ibm.com/docs/en/linux-on-systems?topic=fu-zvm-fields) |
+
+It does **not** pass `hyptop -t`; CPU dispatch types use hyptop’s default (see [CPU types](https://www.ibm.com/docs/en/linux-on-systems?topic=h-cpu-types) for interactive changes).
+
+**LPAR example**
 
 ```bash
 hyptop-exporter \
+  --hypervisor lpar \
+  --listen-host 0.0.0.0 \
+  --listen-port 9105 \
+  --interval-seconds 15 \
+  --hyptop-binary /usr/sbin/hyptop \
+  --hyptop-delay 1 \
+  --smt-speedup 1.3
+```
+
+**z/VM guest example**
+
+```bash
+hyptop-exporter \
+  --hypervisor zvm \
   --listen-host 0.0.0.0 \
   --listen-port 9105 \
   --interval-seconds 15 \
@@ -61,6 +86,7 @@ hyptop-exporter \
 
 | Flag                              | Meaning                                      |
 | --------------------------------- | -------------------------------------------- |
+| `--hypervisor`                    | `lpar` (default) or `zvm`                    |
 | `--listen-host` / `--listen-port` | HTTP bind address for `/metrics`             |
 | `--interval-seconds`              | Sleep between `hyptop` runs                  |
 | `--hyptop-binary`                 | Path to `hyptop`                             |
@@ -104,30 +130,31 @@ Import [grafana/hyptop-lpar.json](grafana/hyptop-lpar.json): **Dashboards → Ne
 
 | Metric                                              | Labels   | Description                                  |
 | --------------------------------------------------- | -------- | -------------------------------------------- |
-| `hyptop_lpar_core_utilization_hyptop_percent`       | `system` | Core dispatch (hyptop % units)               |
-| `hyptop_lpar_thread_utilization_hyptop_percent`     | `system` | Thread time (hyptop % units)                 |
+| `hyptop_lpar_core_utilization_hyptop_percent`       | `system` | Core (LPAR) or cpu (z/VM); hyptop % units    |
+| `hyptop_lpar_thread_utilization_hyptop_percent`     | `system` | Thread (LPAR); on z/VM same as core cpu%     |
 | `hyptop_lpar_management_utilization_hyptop_percent` | `system` | Management time (hyptop % units)             |
-| `hyptop_lpar_real_smt_utilization_hyptop_percent`   | `system` | SMT-adjusted utilization (same units)        |
-| `hyptop_lpar_num_cores`                             | `system` | `#core` from hyptop                          |
-| `hyptop_lpar_num_threads`                           | `system` | `#The` from hyptop                           |
+| `hyptop_lpar_real_smt_utilization_hyptop_percent`   | `system` | SMT-adjusted; on z/VM degenerate (see above) |
+| `hyptop_lpar_num_cores`                             | `system` | LPAR `#core`; z/VM `#cpu`                    |
+| `hyptop_lpar_num_threads`                           | `system` | LPAR `#The`; z/VM equals `#cpu`              |
 | `hyptop_exporter_collection_success`                | —        | `1` if last `hyptop` run and parse succeeded |
 | `hyptop_exporter_last_success_timestamp_seconds`    | —        | Unix time of last successful collection      |
 
 
-Time series for LPARs that disappear from hyptop output are removed on the next successful scrape.
+Time series for systems that disappear from hyptop output are removed on the next successful scrape. Label **`system`** is the LPAR name or z/VM **guest id**.
 
 ## Hyptop references
 
 - [hyptop command](https://www.ibm.com/docs/en/linux-on-systems?topic=commands-hyptop)
 - [LPAR fields](https://www.ibm.com/docs/en/linux-on-systems?topic=fu-lpar-fields)
+- [z/VM fields](https://www.ibm.com/docs/en/linux-on-systems?topic=fu-zvm-fields)
 - [Units](https://www.ibm.com/docs/en/linux-on-systems?topic=fu-units)
 - [CPU types](https://www.ibm.com/docs/en/linux-on-systems?topic=h-cpu-types)
 - [Examples](https://www.ibm.com/docs/en/linux-on-systems?topic=h-examples)
 
 ## Troubleshooting
 
-- `**hyptop_exporter_collection_success` is 0:** Check journal/logs for `hyptop` errors, permissions on `/s390_hypfs`, and HMC “Global performance data” for other LPARs if needed.
-- **No series / empty `system` list:** Confirm batch output includes the `#,T,c,e,m,...` columns; run `hyptop -b -n 1 -f "#,T,c,e,m,C,E,M,o"` manually.
+- **`hyptop_exporter_collection_success` is 0:** Check journal/logs for `hyptop` errors, permissions on `/s390_hypfs`, and HMC “Global performance data” for other LPARs if needed.
+- **No series / empty `system` list:** For LPAR run `hyptop -b -n 1 -f "#,T,c,e,m,C,E,M,o"`; for z/VM run `hyptop -b -n 1 -f "#,c,m,C,M,o"` — output must match `--hypervisor`.
 - **Values look wrong:** Tune `--smt-speedup` (**s**) for your hardware and workload; the blog notes **s** is workload-dependent. CPU-type filtering must be done in hyptop itself (the exporter does not pass `-t`).
 
 ## Development

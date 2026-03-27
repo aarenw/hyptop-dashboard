@@ -7,26 +7,24 @@ import logging
 import sys
 import threading
 import time
+from typing import cast
 
 from prometheus_client import Gauge, start_http_server
 
-from hyptop_dashboard.parser import (
-    parse_hyptop_sys_list_text,
-    real_smt_utilization_percent,
-    run_hyptop_once,
-)
+from hyptop_dashboard.parser import HypervisorKind, parse_hyptop_sys_list_text, real_smt_utilization_percent, run_hyptop_once
 
 LOG = logging.getLogger(__name__)
 
 # HELP: values use hyptop's %% display: 100 == one IFL worth of dispatch for that component.
 CORE_G = Gauge(
     "hyptop_lpar_core_utilization_hyptop_percent",
-    "Core dispatch time per second in hyptop percent units (100 = 1 IFL).",
+    "Core (LPAR) or CPU (z/VM) time per second in hyptop percent units (100 = 1 IFL). "
+    "Label system is LPAR name or z/VM guest id.",
     ["system"],
 )
 THREAD_G = Gauge(
     "hyptop_lpar_thread_utilization_hyptop_percent",
-    "Thread time per second in hyptop percent units (100 = 1 IFL).",
+    "Thread time per second (LPAR #The/e); on z/VM equals core cpu% (no separate thread field).",
     ["system"],
 )
 MGM_G = Gauge(
@@ -36,17 +34,18 @@ MGM_G = Gauge(
 )
 REAL_G = Gauge(
     "hyptop_lpar_real_smt_utilization_hyptop_percent",
-    "SMT-adjusted utilization in hyptop percent units; see linux.mainframe.blog/smt_utilization/.",
+    "SMT-adjusted utilization in hyptop percent units; on z/VM degenerates to u_c/s+u_m (u_t=u_c). "
+    "See linux.mainframe.blog/smt_utilization/.",
     ["system"],
 )
 NUM_CORE_G = Gauge(
     "hyptop_lpar_num_cores",
-    "Number of cores (#core) from hyptop sys_list.",
+    "LPAR #core or z/VM #cpu from hyptop sys_list.",
     ["system"],
 )
 NUM_THREAD_G = Gauge(
     "hyptop_lpar_num_threads",
-    "Number of threads (#The) from hyptop sys_list.",
+    "LPAR #The; z/VM sets equal to #cpu (no thread column in this field set).",
     ["system"],
 )
 SCRAPE_OK = Gauge(
@@ -109,6 +108,7 @@ def _collection_loop(
     hyptop_delay: int,
     hyptop_timeout: float,
     s: float,
+    hypervisor: HypervisorKind,
     gauges: list[Gauge],
 ) -> None:
     previous_systems: set[str] = set()
@@ -118,10 +118,14 @@ def _collection_loop(
                 hyptop_bin=hyptop_bin,
                 delay_seconds=hyptop_delay,
                 timeout_seconds=hyptop_timeout,
+                hypervisor=hypervisor,
             )
-            rows = parse_hyptop_sys_list_text(out)
+            rows = parse_hyptop_sys_list_text(out, hypervisor=hypervisor)
             if not rows:
-                LOG.warning("hyptop produced no LPAR rows; check -f fields and permissions")
+                LOG.warning(
+                    "hyptop produced no sys_list rows (%s); check -f fields and permissions",
+                    hypervisor,
+                )
             current = _update_metrics(rows, s)
             _remove_stale_labels(previous_systems, current, gauges)
             previous_systems = current
@@ -164,6 +168,12 @@ def main(argv: list[str] | None = None) -> int:
         help="hyptop -d delay between screen updates in batch (default 1).",
     )
     p.add_argument(
+        "--hypervisor",
+        choices=("lpar", "zvm"),
+        default="lpar",
+        help="sys_list field set: lpar uses -f '#,T,c,e,m,C,E,M,o'; zvm uses -f '#,c,m,C,M,o'.",
+    )
+    p.add_argument(
         "--hyptop-timeout",
         type=float,
         default=30.0,
@@ -202,6 +212,7 @@ def main(argv: list[str] | None = None) -> int:
             "hyptop_delay": args.hyptop_delay,
             "hyptop_timeout": args.hyptop_timeout,
             "s": args.smt_speedup,
+            "hypervisor": cast(HypervisorKind, args.hypervisor),
             "gauges": gauges,
         },
         daemon=True,

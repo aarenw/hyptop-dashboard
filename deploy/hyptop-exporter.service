@@ -7,8 +7,10 @@ Wants=network-online.target
 Type=simple
 # Adjust User to a non-root account that can read /s390_hypfs (often root is required on LPAR).
 User=root
-# Use the venv interpreter and module path from your install:
+# Use the venv interpreter and module path from your install.
+# LPAR (default): --hypervisor lpar  |  z/VM Linux guest: add --hypervisor zvm
 ExecStart=/opt/hyptop-dashboard/.venv/bin/python -m hyptop_dashboard \
+    --hypervisor lpar \
     --listen-host 0.0.0.0 \
     --listen-port 9105 \
     --interval-seconds 15 \
