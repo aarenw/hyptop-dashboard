@@ -14,7 +14,7 @@ ExecStart=/opt/hyptop-dashboard/.venv/bin/python -m hyptop_dashboard \
     --listen-host 0.0.0.0 \
     --listen-port 9105 \
     --interval-seconds 15 \
-    --hyptop-binary /usr/bin/hyptop \
+    --hyptop-binary /usr/sbin/hyptop \
     --hyptop-delay 1 \
     --smt-speedup 1.3
 Restart=on-failure
