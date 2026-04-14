@@ -1,8 +1,6 @@
 # hyptop-dashboard
 
-在 IBM Z 和 LinuxONE 上，计算资源常被过度超配。本仓库提供一个在 **LPAR 或 z/VM 客户机 Linux** 上运行的小型 **Prometheus exporter**：周期性调用 [hyptop](https://www.ibm.com/docs/en/linux-on-systems?topic=c-hyptop) 采集指标，按 [SMT 真实利用率](https://linux.mainframe.blog/smt_utilization/) 公式计算 **SMT 调整后的利用率**（LPAR 上；z/VM 上见下文说明），并通过 HTTP `/metrics` 供 Prometheus 抓取。
-
-On IBM Z and LinuxONE, compute capacity is often oversubscribed. This repo ships a **Prometheus exporter** that runs on **Linux in an LPAR or a z/VM guest**, periodically runs **hyptop**, computes **SMT-adjusted “real” utilization** where separate thread/core figures exist (LPAR), and exposes **Prometheus** metrics over HTTP for **Grafana** dashboards.
+On IBM Z and LinuxONE, compute capacity is often oversubscribed. This repo ships a **Prometheus exporter** that runs on **Linux in an LPAR or a z/VM guest**, periodically runs [hyptop](https://www.ibm.com/docs/en/linux-on-systems?topic=c-hyptop), computes **SMT-adjusted “real” utilization** using the [SMT utilization](https://linux.mainframe.blog/smt_utilization/) formula where separate thread/core figures exist (LPAR; see below for z/VM), and exposes **Prometheus** metrics over HTTP for **Grafana** dashboards.
 
 ## Requirements
 
@@ -110,13 +108,15 @@ sudo systemctl status hyptop-exporter
 ```
 
 **Firewall:** Allow Prometheus (or your scrapers) to reach `LISTEN_PORT` (default **9105**) on the LPAR.
-```# 添加永久规则（--permanent 确保重启后生效）
+
+```bash
+# Add a permanent rule (--permanent survives reboot)
 sudo firewall-cmd --permanent --add-port=9105/tcp
 
-# 重载防火墙（不中断现有连接，使新规则立即生效）
+# Reload firewalld (applies new rules without dropping existing connections)
 sudo firewall-cmd --reload
 
-# 验证端口是否开放
+# Verify the port is open
 sudo firewall-cmd --list-ports
 ```
 
@@ -134,13 +134,13 @@ scrape_configs:
 
 Import [grafana/hyptop-lpar.json](grafana/hyptop-lpar.json): **Dashboards → New → Import → Upload JSON**. Choose your Prometheus datasource when prompted.
 
-导入并选择数据源后的 **Hyptop LPAR utilization** 看板示例（含 Real SMT、每核 hyptop%、core/thread/mgm、核数与采集状态）：
+Example **Hyptop LPAR utilization** dashboard after import and datasource selection (Real SMT, hyptop % per core, core/thread/mgm, core/thread counts, and collection status):
 
 ![Hyptop LPAR utilization dashboard in Grafana](images/HyptopMetrics-1.png)
 
-## OpenShift（Prometheus + Grafana）
+## OpenShift (Prometheus + Grafana)
 
-在 OpenShift 上使用红帽 **Prometheus** 与 **Grafana** 容器镜像自建采集与展示栈（不使用 Cluster Observability Operator）、通过 **Route** 对外暴露 UI、PVC 使用默认 StorageClass 的说明见：[docs/openshift-prometheus-grafana-hyptop.md](docs/openshift-prometheus-grafana-hyptop.md)。清单：[Openshift/prometheus-grafana-stack.yaml](Openshift/prometheus-grafana-stack.yaml)；指向 hyptop exporter 的 Service 示例：[Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml)。
+To run a self-managed **Prometheus** and **Grafana** stack on OpenShift using Red Hat container images (without Cluster Observability Operator), expose the UIs via **Route**, and use the default StorageClass for PVCs, see [docs/openshift-prometheus-grafana-hyptop.md](docs/openshift-prometheus-grafana-hyptop.md). Manifests: [Openshift/prometheus-grafana-stack.yaml](Openshift/prometheus-grafana-stack.yaml); example Service pointing at the hyptop exporter: [Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml).
 
 ## Metrics
 
@@ -183,10 +183,9 @@ pip install -e ".[dev]"   # or: pip install pytest && PYTHONPATH=src pytest
 pytest
 ```
 
-## 原始需求对照
+## Requirements traceability
 
-1. 脚本：周期性运行 hyptop，计算利用率，通过 Prometheus 抓取 HTTP 指标（`hyptop-exporter` / `python -m hyptop_dashboard`）。
-2. systemd：`deploy/hyptop-exporter.service` 与本文安装说明。
-3. Grafana：`grafana/hyptop-lpar.json`。
-4. README：本文档（原「晚上更新 README」按「完善 README」理解，已合并为正式说明）。
-
+1. **Script:** Periodically run hyptop, compute utilization, expose HTTP metrics for Prometheus (`hyptop-exporter` / `python -m hyptop_dashboard`).
+2. **systemd:** [deploy/hyptop-exporter.service](deploy/hyptop-exporter.service) and the install/run sections above.
+3. **Grafana:** [grafana/hyptop-lpar.json](grafana/hyptop-lpar.json).
+4. **README:** This document (original “update README tonight” intent folded into the maintained guide above).
