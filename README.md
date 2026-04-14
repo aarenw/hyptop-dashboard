@@ -110,6 +110,15 @@ sudo systemctl status hyptop-exporter
 ```
 
 **Firewall:** Allow Prometheus (or your scrapers) to reach `LISTEN_PORT` (default **9105**) on the LPAR.
+```# 添加永久规则（--permanent 确保重启后生效）
+sudo firewall-cmd --permanent --add-port=9105/tcp
+
+# 重载防火墙（不中断现有连接，使新规则立即生效）
+sudo firewall-cmd --reload
+
+# 验证端口是否开放
+sudo firewall-cmd --list-ports
+```
 
 ## Prometheus
 
@@ -125,6 +134,10 @@ scrape_configs:
 
 Import [grafana/hyptop-lpar.json](grafana/hyptop-lpar.json): **Dashboards → New → Import → Upload JSON**. Choose your Prometheus datasource when prompted.
 
+## OpenShift（Prometheus + Grafana）
+
+在 OpenShift 上使用红帽 **Prometheus** 与 **Grafana** 容器镜像自建采集与展示栈（不使用 Cluster Observability Operator）、通过 **Route** 对外暴露 UI、PVC 使用默认 StorageClass 的说明见：[docs/openshift-prometheus-grafana-hyptop.md](docs/openshift-prometheus-grafana-hyptop.md)。清单：[Openshift/prometheus-grafana-stack.yaml](Openshift/prometheus-grafana-stack.yaml)；指向 hyptop exporter 的 Service 示例：[Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml)。
+
 ## Metrics
 
 
@@ -134,6 +147,8 @@ Import [grafana/hyptop-lpar.json](grafana/hyptop-lpar.json): **Dashboards → Ne
 | `hyptop_lpar_thread_utilization_hyptop_percent`     | `system` | Thread (LPAR); on z/VM same as core cpu%     |
 | `hyptop_lpar_management_utilization_hyptop_percent` | `system` | Management time (hyptop % units)             |
 | `hyptop_lpar_real_smt_utilization_hyptop_percent`   | `system` | SMT-adjusted; on z/VM degenerate (see above) |
+| `hyptop_lpar_core_per_num_cores_hyptop_percent`     | `system` | Core hyptop % divided by `#core` (z/VM: `#cpu`) |
+| `hyptop_lpar_real_smt_per_num_cores_hyptop_percent` | `system` | SMT-adjusted hyptop % divided by `#core` (`u_r` / `#core`) |
 | `hyptop_lpar_num_cores`                             | `system` | LPAR `#core`; z/VM `#cpu`                    |
 | `hyptop_lpar_num_threads`                           | `system` | LPAR `#The`; z/VM equals `#cpu`              |
 | `hyptop_exporter_collection_success`                | —        | `1` if last `hyptop` run and parse succeeded |

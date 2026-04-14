@@ -38,6 +38,17 @@ REAL_G = Gauge(
     "See linux.mainframe.blog/smt_utilization/.",
     ["system"],
 )
+CORE_PER_NUM_CORES_G = Gauge(
+    "hyptop_lpar_core_per_num_cores_hyptop_percent",
+    "hyptop_lpar_core_utilization_hyptop_percent divided by hyptop_lpar_num_cores (hyptop percent scale per configured core).",
+    ["system"],
+)
+REAL_PER_NUM_CORES_G = Gauge(
+    "hyptop_lpar_real_smt_per_num_cores_hyptop_percent",
+    "hyptop_lpar_real_smt_utilization_hyptop_percent divided by hyptop_lpar_num_cores "
+    "(SMT-adjusted hyptop percent scale per configured core).",
+    ["system"],
+)
 NUM_CORE_G = Gauge(
     "hyptop_lpar_num_cores",
     "LPAR #core or z/VM #cpu from hyptop sys_list.",
@@ -83,6 +94,14 @@ def _update_metrics(rows, s: float) -> set[str]:
         REAL_G.labels(row.system).set(u_r)
         NUM_CORE_G.labels(row.system).set(row.num_cores)
         NUM_THREAD_G.labels(row.system).set(row.num_threads)
+        if row.num_cores > 0:
+            inv = 1.0 / row.num_cores
+            CORE_PER_NUM_CORES_G.labels(row.system).set(row.core_percent * inv)
+            REAL_PER_NUM_CORES_G.labels(row.system).set(u_r * inv)
+        else:
+            LOG.debug("zero num_cores for system %s; per-core gauges set to 0", row.system)
+            CORE_PER_NUM_CORES_G.labels(row.system).set(0.0)
+            REAL_PER_NUM_CORES_G.labels(row.system).set(0.0)
     return seen
 
 
@@ -194,7 +213,16 @@ def main(argv: list[str] | None = None) -> int:
         LOG.error("--smt-speedup must be positive")
         return 2
 
-    gauges = [CORE_G, THREAD_G, MGM_G, REAL_G, NUM_CORE_G, NUM_THREAD_G]
+    gauges = [
+        CORE_G,
+        THREAD_G,
+        MGM_G,
+        REAL_G,
+        CORE_PER_NUM_CORES_G,
+        REAL_PER_NUM_CORES_G,
+        NUM_CORE_G,
+        NUM_THREAD_G,
+    ]
 
     start_http_server(args.listen_port, addr=args.listen_host)
     LOG.info(

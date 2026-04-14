@@ -13,20 +13,7 @@ spec:
       port: 9105
       protocol: TCP
       targetPort: 9105
----
-apiVersion: monitoring.rhobs/v1
-kind: ServiceMonitor
-metadata:
-  name: hyptopmetric
-  namespace: <your namespace>
-spec:
-  namespaceSelector:
-    matchNames:
-      - <your namespace>
-  selector:
-    matchLabels:
-      app: hyptopmetric
-  endpoints:
-    - port: metrics
-      path: /metrics
-      interval: 30s
+# Optional: ServiceMonitor was only for Cluster Observability Operator.
+# With in-cluster Prometheus (Openshift/prometheus-grafana-stack.yaml), scraping is
+# configured in the prometheus ConfigMap static_configs target
+# hyptopmetric.<namespace>.svc.cluster.local:9105

@@ -1,0 +1,271 @@
+# Hyptop monitoring on OpenShift: Prometheus + Grafana (no Cluster Observability Operator).
+# Images (pin as needed for your subscription):
+#   registry.redhat.io/openshift4/ose-prometheus-rhel9:v4.20
+#   registry.redhat.io/rhel10/grafana:10.1
+#
+# Apply order:
+#   1. Edit Namespace / scrape target if needed.
+#   2. Create pull secret for registry.redhat.io and link to default SA (see docs).
+#   3. Replace CHANGE_ME in grafana-admin Secret (or oc create secret ... instead).
+#   4. oc apply -f Openshift/hyptopsrv.yaml   # exporter Service (+ Endpoints if not ExternalName)
+#   5. oc apply -f Openshift/prometheus-grafana-stack.yaml
+#
+# PVCs omit storageClassName so the cluster default StorageClass is used.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hyptop-observe
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin
+  namespace: hyptop-observe
+type: Opaque
+stringData:
+  password: CHANGE_ME
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: hyptop-observe
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 30s
+      evaluation_interval: 30s
+
+    scrape_configs:
+      - job_name: hyptop
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["hyptopmetric.hyptop-observe.svc.cluster.local:9105"]
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: hyptop-observe
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: hyptop-observe
+  labels:
+    app: prometheus
+spec:
+  ports:
+    - name: web
+      port: 9090
+      targetPort: web
+      protocol: TCP
+  selector:
+    app: prometheus
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: hyptop-observe
+  labels:
+    app: prometheus
+spec:
+  serviceName: prometheus
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: registry.redhat.io/openshift4/ose-prometheus-rhel9:v4.20
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --web.enable-lifecycle
+          ports:
+            - name: web
+              containerPort: 9090
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: prometheus-data
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: web
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: web
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+  volumeClaimTemplates:
+    - metadata:
+        name: prometheus-data
+        labels:
+          app: prometheus
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: hyptop-observe
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.hyptop-observe.svc:9090
+        isDefault: true
+        editable: false
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: hyptop-observe
+  labels:
+    app: grafana
+spec:
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: grafana
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: hyptop-observe
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: registry.redhat.io/rhel10/grafana:10.1
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: password
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+          volumeMounts:
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+            - name: grafana-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: grafana-data
+          persistentVolumeClaim:
+            claimName: grafana-data
+        - name: grafana-datasources
+          configMap:
+            name: grafana-datasources
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: prometheus
+  namespace: hyptop-observe
+  labels:
+    app: prometheus
+spec:
+  to:
+    kind: Service
+    name: prometheus
+    weight: 100
+  port:
+    targetPort: web
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: grafana
+  namespace: hyptop-observe
+  labels:
+    app: grafana
+spec:
+  to:
+    kind: Service
+    name: grafana
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
