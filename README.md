@@ -134,6 +134,10 @@ scrape_configs:
 
 Import [grafana/hyptop-lpar.json](grafana/hyptop-lpar.json): **Dashboards → New → Import → Upload JSON**. Choose your Prometheus datasource when prompted.
 
+导入并选择数据源后的 **Hyptop LPAR utilization** 看板示例（含 Real SMT、每核 hyptop%、core/thread/mgm、核数与采集状态）：
+
+![Hyptop LPAR utilization dashboard in Grafana](images/HyptopMetrics-1.png)
+
 ## OpenShift（Prometheus + Grafana）
 
 在 OpenShift 上使用红帽 **Prometheus** 与 **Grafana** 容器镜像自建采集与展示栈（不使用 Cluster Observability Operator）、通过 **Route** 对外暴露 UI、PVC 使用默认 StorageClass 的说明见：[docs/openshift-prometheus-grafana-hyptop.md](docs/openshift-prometheus-grafana-hyptop.md)。清单：[Openshift/prometheus-grafana-stack.yaml](Openshift/prometheus-grafana-stack.yaml)；指向 hyptop exporter 的 Service 示例：[Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml)。
