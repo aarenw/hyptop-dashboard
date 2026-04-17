@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hyptop-dashboard
+  namespace: openshift-config-managed
+  labels:
+    console.openshift.io/dashboard: "true"
+    console.openshift.io/odc-dashboard: "true"
+data:
+  hyptop-dashboard.json: |-
+    {
+      "title": "Hyptop LPAR utilization",
+      "uid": "hyptop-ocp-dashboard",
+      "schemaVersion": 27,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-6h", "to": "now" },
+      "tags": ["hyptop", "ibm-z", "linuxone", "ocp"],
+      "templating": {
+        "list": [
+          {
+            "name": "lpar",
+            "type": "query",
+            "label": "LPAR / system",
+            "datasource": "Prometheus",
+            "refresh": 2,
+            "includeAll": true,
+            "multi": false,
+            "allValue": ".*",
+            "query": "label_values(hyptop_lpar_core_utilization_hyptop_percent, system)",
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": ".*"
+            }
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "title": "Collection success",
+          "type": "stat",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(hyptop_exporter_collection_success)"
+            }
+          ],
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"], "values": false }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Real SMT utilization (hyptop %; 100 approx 1 IFL)",
+          "type": "graph",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "hyptop_lpar_real_smt_utilization_hyptop_percent{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} real SMT"
+            }
+          ],
+          "lines": true,
+          "fill": 1
+        },
+        {
+          "id": 3,
+          "title": "Core / thread / management (hyptop %)",
+          "type": "graph",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 9, "w": 24, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "hyptop_lpar_core_utilization_hyptop_percent{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} core"
+            },
+            {
+              "refId": "B",
+              "expr": "hyptop_lpar_thread_utilization_hyptop_percent{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} thread"
+            },
+            {
+              "refId": "C",
+              "expr": "hyptop_lpar_management_utilization_hyptop_percent{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} mgm"
+            }
+          ],
+          "lines": true,
+          "fill": 1
+        },
+        {
+          "id": 4,
+          "title": "Per-core normalized utilization",
+          "type": "graph",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 9, "w": 24, "x": 0, "y": 17 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "hyptop_lpar_core_per_num_cores_hyptop_percent{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} core/#cores"
+            },
+            {
+              "refId": "B",
+              "expr": "hyptop_lpar_real_smt_per_num_cores_hyptop_percent{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} real SMT/#cores"
+            }
+          ],
+          "lines": true,
+          "fill": 1
+        },
+        {
+          "id": 5,
+          "title": "Configured cores and threads",
+          "type": "graph",
+          "datasource": "Prometheus",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "hyptop_lpar_num_cores{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} #cores"
+            },
+            {
+              "refId": "B",
+              "expr": "hyptop_lpar_num_threads{system=~\"$lpar\"}",
+              "legendFormat": "{{system}} #threads"
+            }
+          ],
+          "lines": true,
+          "fill": 0
+        }
+      ]
+    }

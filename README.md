@@ -138,9 +138,19 @@ Example **Hyptop LPAR utilization** dashboard after import and datasource select
 
 ![Hyptop LPAR utilization dashboard in Grafana](images/HyptopMetrics-1.png)
 
-## OpenShift (Prometheus + Grafana)
+## OpenShift
 
-To run a self-managed **Prometheus** and **Grafana** stack on OpenShift using Red Hat container images (without Cluster Observability Operator), expose the UIs via **Route**, and use the default StorageClass for PVCs, see [docs/openshift-prometheus-grafana-hyptop.md](docs/openshift-prometheus-grafana-hyptop.md). Manifests: [Openshift/prometheus-grafana-stack.yaml](Openshift/prometheus-grafana-stack.yaml); example Service pointing at the hyptop exporter: [Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml).
+Two deployment paths are documented:
+
+1. **OpenShift Monitoring Stack (user-workload-monitoring)**  
+   Collect hyptop metrics with `ServiceMonitor`, add exporter alert rules, and show a Grafana-like dashboard in **Observe -> Dashboards**.  
+   Guide: [docs/openshift-ocp-monitoring-hyptop.md](docs/openshift-ocp-monitoring-hyptop.md)  
+   Manifests: [Openshift/ocp-monitoring-stack.yaml](Openshift/ocp-monitoring-stack.yaml), [Openshift/ocp-console-dashboard.yaml](Openshift/ocp-console-dashboard.yaml), [Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml)
+
+2. **Self-managed Prometheus + Grafana in a project namespace**  
+   Run Prometheus and Grafana deployments/routes yourself (without Cluster Observability Operator).  
+   Guide: [docs/openshift-prometheus-grafana-hyptop.md](docs/openshift-prometheus-grafana-hyptop.md)  
+   Manifests: [Openshift/prometheus-grafana-stack.yaml](Openshift/prometheus-grafana-stack.yaml), [Openshift/hyptopsrv.yaml](Openshift/hyptopsrv.yaml)
 
 ## Metrics
 
