@@ -97,7 +97,7 @@ data:
         },
         {
           "id": 4,
-          "title": "Per-core normalized utilization",
+          "title": "Per configured core(core/#core and real SMT/#core)",
           "type": "graph",
           "datasource": "Prometheus",
           "gridPos": { "h": 9, "w": 24, "x": 0, "y": 17 },

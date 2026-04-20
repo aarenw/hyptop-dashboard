@@ -55,4 +55,19 @@ spec:
           annotations:
             summary: Hyptop exporter collection failing
             description: hyptop exporter did not report a successful collection in the last 10 minutes.
-*** End Patch
+        - alert: HyptopIFLUtilizationHighWarning
+          expr: hyptop_lpar_core_per_num_cores_hyptop_percent > 70
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: IFL utilization is high
+            description: The LPAR/VM {{ $labels.system}} IFL utilization (core/#core) {{ $value }} is above 70%; please closely monitor IFL utilization.
+        - alert: HyptopIFLUtilizationHighCritical
+          expr: hyptop_lpar_core_per_num_cores_hyptop_percent > 80
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: IFL utilization is critically high
+            description: The LPAR/VM {{ $labels.system}} IFL utilization (core/#core) {{ $value }} has stayed above 80%; please take action to adjust IFL resource allocation.
